@@ -6,8 +6,9 @@
     "target": "es2015",
     "strict": true,
     "moduleResolution": "node",
-    "outDir": "./dist",
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "lib": [
       "es6",
       "es7",
@@ -17,7 +18,8 @@
     "typeRoots": [
         "./node_modules/@types",
         "./node_modules/@infogata"
-    ]
+    ],
+    "types": []
   },
   "include": [
     "src/**/*",
