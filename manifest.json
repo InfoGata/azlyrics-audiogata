@@ -1,7 +1,7 @@
 {
   "id": "6c9178c6-5118-11ee-be56-0242ac120002",
   "name": "Plugin for Azlyrics",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "script": "dist/index.js",
   "description": "Get lyrics from azlyrics.com"
 }
