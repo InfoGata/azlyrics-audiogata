@@ -1,38 +1,116 @@
-import azlyrics from "js-azlyrics";
 import "@infogata/audiogata-plugin-typings";
 
-// Monkey patch fetch to use application.networkRequest
-(globalThis as any).fetch = async (url: string, options?: RequestInit) => {
-  return application.networkRequest(url, options);
+const normalizeForUrl = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/^the\s+/i, "")
+    .replace(/\s*\([^)]*\)\s*/g, "")
+    .replace(/[^a-z0-9]/g, "");
 };
 
-const SEARCH_URL = "https://search.azlyrics.com";
-const MAIN_URL = "https://www.azlyrics.com";
+const parseArtistAndSong = (
+  request: GetLyricsRequest
+): { artist: string; song: string } => {
+  let artist = request.artistName || "";
+  let song = request.trackName || "";
+
+  if (!artist && song.includes(" - ")) {
+    const parts = song.split(" - ");
+    artist = parts[0].trim();
+    song = parts.slice(1).join(" - ").trim();
+  }
+
+  return { artist, song };
+};
+
+const extractLyrics = (html: string): string => {
+  const match = html.match(
+    /<!-- Usage of azlyrics[\s\S]*?-->\s*([\s\S]*?)<\/div>/
+  );
+  if (!match) return "";
+  return match[1]
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+};
+
+const findSongOnArtistPage = async (
+  artist: string,
+  song: string
+): Promise<string | null> => {
+  const firstLetter = artist.charAt(0);
+  const artistPageUrl = `https://www.azlyrics.com/${firstLetter}/${artist}.html`;
+
+  try {
+    const response = await application.networkRequest(artistPageUrl);
+    if (!response.ok) return null;
+    const html = await response.text();
+
+    const linkPattern = new RegExp(
+      `href="(/lyrics/${artist}/[^"]+\\.html)"[^>]*>([^<]+)<`,
+      "gi"
+    );
+    const normalizedSearch = song.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    let match;
+    while ((match = linkPattern.exec(html)) !== null) {
+      const songPath = match[1];
+      const songTitle = match[2].toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      if (
+        songTitle.includes(normalizedSearch) ||
+        normalizedSearch.includes(songTitle)
+      ) {
+        return `https://www.azlyrics.com${songPath}`;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
 
 export const getLyrics = async (
   request: GetLyricsRequest
 ): Promise<GetLyricsResponse> => {
-  const isCorsDisabled = await application.isNetworkRequestCorsDisabled();
-  if (!isCorsDisabled) {
-    application.createNotification({
+  if (!(await application.isNetworkRequestCorsDisabled())) {
+    await application.createNotification({
       type: "error",
       message: "InfoGata extension must be enabled to use this plugin.",
     });
     return { lyrics: "" };
   }
-  let query = request.trackName;
-  if (request.artistName) {
-    query = `${request.artistName} - ${request.artistName}`;
-  } else {
-    // If only have trackName, remove things like (Official Video)
-    // by removing things between parentheses
-    query = query.replace(/ *\([^)]*\) */g, "");
+
+  const { artist, song } = parseArtistAndSong(request);
+  const normalizedArtist = normalizeForUrl(artist);
+  const normalizedSong = normalizeForUrl(song);
+
+  if (!normalizedArtist || !normalizedSong) {
+    return { lyrics: "" };
   }
-  const lyricsRespone = await azlyrics.get(query, {
-    searchEndpoint: SEARCH_URL,
-    mainEndpoint: MAIN_URL
-  });
-  return { lyrics: lyricsRespone.lyrics };
+
+  // Try direct URL first
+  const url = `https://www.azlyrics.com/lyrics/${normalizedArtist}/${normalizedSong}.html`;
+
+  try {
+    let response = await application.networkRequest(url);
+
+    // Fallback: search artist page if direct URL fails
+    if (!response.ok) {
+      const fallbackUrl = await findSongOnArtistPage(
+        normalizedArtist,
+        normalizedSong
+      );
+      if (!fallbackUrl) return { lyrics: "" };
+      response = await application.networkRequest(fallbackUrl);
+    }
+
+    const html = await response.text();
+    const lyrics = extractLyrics(html);
+    return { lyrics };
+  } catch {
+    return { lyrics: "" };
+  }
 };
 
 application.onGetLyrics = getLyrics;

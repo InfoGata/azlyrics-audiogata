@@ -7,7 +7,8 @@ describe("index", () => {
     const lyricsResponse = await getLyrics({
       trackName: "Kendrick Lamar - Alright",
     });
-    expect(lyricsResponse.lyrics).not.toBeNull();
+    expect(lyricsResponse.lyrics).toBeTruthy();
+    expect(lyricsResponse.lyrics.length).toBeGreaterThan(100);
   });
 
   test("Can get lyrics with artistName", async () => {
@@ -15,14 +16,15 @@ describe("index", () => {
       trackName: "Alright",
       artistName: "Kendrick Lamar",
     });
-    expect(lyricResponse.lyrics).not.toBeNull();
+    expect(lyricResponse.lyrics).toBeTruthy();
+    expect(lyricResponse.lyrics.length).toBeGreaterThan(100);
   });
 
   test("Can get lyrics with extra info", async () => {
     const lyricResponse = await getLyrics({
       trackName: "Doja Cat - Demons (Official Video)",
     });
-    console.log(lyricResponse);
-    expect(lyricResponse.lyrics).not.toBeNull();
+    expect(lyricResponse.lyrics).toBeTruthy();
+    expect(lyricResponse.lyrics.length).toBeGreaterThan(100);
   });
 });
